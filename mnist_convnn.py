@@ -29,16 +29,16 @@ import tensorflow as tf
 FLAGS = None
 
 
-def weight_variable(shape, init_noise = 0.1):
+def weight_variable(shape, init_noise = 0.1, **kwargs):
     # Initialize weights with small amount of noise for symmetry breaking and
     # prevent zero gradients
     initial = tf.truncated_normal(shape, stddev = init_noise)
-    return tf.Variable(initial)
+    return tf.Variable(initial, **kwargs)
 
-def bias_variable(shape, bias = 0.1):
+def bias_variable(shape, bias = 0.1, **kwargs):
     # We will use ReLU neurons, init with small bias to avoid "dead neurons"
     initial = tf.constant(bias, shape = shape)
-    return tf.Variable(initial)
+    return tf.Variable(initial, **kwargs)
 
 def conv2d(x, W):
     return tf.nn.conv2d(x, W, strides = [1, 1, 1, 1], padding = 'SAME')
@@ -56,20 +56,20 @@ def main(_):
     # Define convolutional net
     # First layer
     x_image = tf.reshape(x, [-1, 28, 28, 1])
-    W_conv1 = weight_variable([5, 5, 1, 32])
-    b_conv1 = bias_variable([32])
+    W_conv1 = weight_variable([5, 5, 1, 32], name = 'W_conv1')
+    b_conv1 = bias_variable([32], name = 'b_conv1')
     h_conv1 = tf.nn.relu(conv2d(x_image, W_conv1) + b_conv1)
     h_pool1 = max_pool_2x2(h_conv1)
 
     # Second layer
-    W_conv2 = weight_variable([5, 5, 32, 64])
-    b_conv2 = bias_variable([64])
+    W_conv2 = weight_variable([5, 5, 32, 64], name = 'W_conv2')
+    b_conv2 = bias_variable([64], name = 'b_conv2')
     h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
     h_pool2 = max_pool_2x2(h_conv2)
 
     # Densely connected layer
-    W_fc1 = weight_variable([7 * 7 * 64, 1024])
-    b_fc1 = bias_variable([1024])
+    W_fc1 = weight_variable([7 * 7 * 64, 1024], name = 'W_fc1')
+    b_fc1 = bias_variable([1024], name = 'b_fc1')
     h_pool2_flat = tf.reshape(h_pool2, [-1, 7*7*64])
     h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
@@ -78,8 +78,8 @@ def main(_):
     h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
     # Readout layer
-    W_fc2 = weight_variable([1024, 10])
-    b_fc2 = bias_variable([10])
+    W_fc2 = weight_variable([1024, 10], name = 'W_fc2')
+    b_fc2 = bias_variable([10], name = 'b_fc2')
     y_conv = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
 
     # Define cross entropy loss and ADAM optimizer
@@ -87,6 +87,9 @@ def main(_):
     train_step = tf.train.AdamOptimizer(FLAGS.step_size).minimize(cross_entropy)
     correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+    # Add ops to save/restore all variables
+    saver = tf.train.Saver()
 
     # Train using mini-batches
     sess = tf.InteractiveSession()
@@ -100,6 +103,9 @@ def main(_):
                 x: batch_xs, y_: batch_ys, keep_prob: 1.0})
             print("step {}, training accuracy {}".format(i, train_accuracy))
         train_step.run(feed_dict = {x: batch_xs, y_: batch_ys, keep_prob: 0.5})
+
+    # Write trained model to file
+    saver.save(sess, FLAGS.model_file)
 
     # Test trained model, report classification accuracy
     test_accuracy = accuracy.eval(feed_dict = {
@@ -118,9 +124,16 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type = float, default = 20.0,
                         help = 'How many times to cycle through all 55k ' \
                         'training images during training')
+    parser.add_argument('--save', type = bool, default = False,
+                        help = 'Whether to save trained model to file.')
+    parser.add_argument('--model_file', type = str, default = 'mnist_convnn.tfl',
+                        help = 'Filename for saving tensorflow model.')
     FLAGS = parser.parse_args()
     print('MNIST data directory:', FLAGS.data_dir)
     print('Gradient descent step size:', FLAGS.step_size)
     print('Batch size:', FLAGS.batch_size)
     print('Epochs:', FLAGS.epochs)
+    print('Write model to disk:', FLAGS.save)
+    if FLAGS.save:
+        print('Filename for saving model:', FLAGS.model_file)
     tf.app.run()
