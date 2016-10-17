@@ -20,6 +20,52 @@ from tensorflow.examples.tutorials.mnist import mnist
 FLAGS = None
 
 
+def fill_feed_dict(data_set, images_placeholder, labels_placeholder):
+    """Fills feed dictionary.
+
+    Args:
+      data_set: set of images / labels, from input_data.read_data_sets()
+      images_placeholder: images placeholder
+      labels_placeholder: labels placeholder
+
+    Returns:
+      feed_dict: dictionary mapping placeholder to values
+    """
+    batch_images, batch_labels = data_set.next_batch(
+        FLAGS.batch_size, FLAGS.fake_data)
+    feed_dict = {
+        images_placeholder: batch_images,
+        labels_placeholder: batch_labels,
+    }
+    return feed_dict
+
+
+def evaluate(session, eval_correct, images_placeholder, labels_placeholder,
+             data_set):
+    """Runs one evaluation against the full epoch of data.
+
+    Args:
+      session: session in which model has been trained.
+      eval_correct: Tensor which returns the number of correct predictions.
+      images_placeholder: images placeholder to feed into evaluation tensor
+      labels_placeholder: labels placeholder to feed into evaluation tensor
+      data_set: set of images and labels to evaluate
+
+    Returns:
+      None. Writes statistics to stdout.
+    """
+    true_count = 0
+    steps_per_epoch = data_set.num_examples // FLAGS.batch_size
+    num_examples = steps_per_epoch * FLAGS.batch_size
+    for step in range(steps_per_epoch):
+        feed_dict = fill_feed_dict(
+            data_set, images_placeholder, labels_placeholder)
+        true_count += session.run(eval_correct, feed_dict = feed_dict)
+    precision = true_count / num_examples
+    fmt_str = '  Num examples: {:5}  Num correct: {:5}  Precision: {:0.04f}'
+    print(fmt_str.format(num_examples, true_count, precision))
+
+
 def main(_):
     """Train MNIST"""
     data_sets = input_data.read_data_sets(FLAGS.data_dir, FLAGS.fake_data)
@@ -56,10 +102,8 @@ def main(_):
             start_time = time.time()
 
             # Construct batch of MNIST images/labels to feed into NN
-            batch_images, batch_labels = data_sets.train.next_batch(
-                FLAGS.batch_size, FLAGS.fake_data)
-            feed_dict = { images_placeholder: batch_images,
-                          labels_placeholder: batch_labels }
+            feed_dict = fill_feed_dict(
+                data_sets.train, images_placeholder, labels_placeholder)
 
             # Execute and fetch results: train_op is the key operation,
             # but the result we want is loss
@@ -78,8 +122,17 @@ def main(_):
             if (step + 1) % 1000 == 0 or (step + 1) == FLAGS.max_steps:
                 checkpoint_file = os.path.join(FLAGS.train_dir, 'checkpoint')
                 saver.save(sess, checkpoint_file, global_step = step)
+                # Print precision against training, validation & test sets
+                print('Training precision:  ', end = '')
+                evaluate(sess, eval_correct, images_placeholder,
+                         labels_placeholder, data_sets.train)
+                print('Validation precision:  ', end = '')
+                evaluate(sess, eval_correct, images_placeholder,
+                         labels_placeholder, data_sets.validation)
+                print('Test precision:  ', end = '')
+                evaluate(sess, eval_correct, images_placeholder,
+                         labels_placeholder, data_sets.test)
                 
-
 
 if __name__ == '__main__':
     flags = tf.app.flags
