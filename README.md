@@ -1,2 +1,3 @@
-# tensorflow-tutorials
-Repository for tinkering with TensorFlow
+# Machine Learning Experiments
+
+Repository for tinkering with machine learning.
